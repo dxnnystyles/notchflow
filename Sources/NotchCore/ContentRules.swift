@@ -62,19 +62,24 @@ public enum MeetingLinks {
         case webex
         case whereby
 
-        func accepts(host: String, path: String) -> Bool {
+        func accepts(host: String, url: URL) -> Bool {
             switch self {
-            case .prefix(let prefix): return path.hasPrefix(prefix)
-            case .googleMeet: return path.count >= 4
+            case .prefix(let prefix): return url.path.hasPrefix(prefix)
+            case .googleMeet: return url.path.count >= 4
             case .webex:
                 guard host.hasSuffix(".webex.com"), host != "www.webex.com" else { return false }
-                let components = path.split(separator: "/")
+                let components = url.path.split(separator: "/")
+                let last = components.last?.lowercased() ?? ""
+                let hasMeetingID = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
+                    .contains { $0.name.caseInsensitiveCompare("MTID") == .orderedSame } ?? false
                 return (components.first == "meet" && components.count > 1)
-                    || components.first == "join" || components.last == "j.php"
+                    || (components.first == "join" && components.count > 1)
+                    || (last.hasSuffix(".php") && hasMeetingID)
             case .whereby:
-                let components = path.split(separator: "/")
+                let components = url.path.split(separator: "/")
                 guard components.count == 1, let room = components.first else { return false }
-                return !["login", "pricing"].contains(room.lowercased())
+                return !["about", "blog", "download", "embedded", "information", "login", "pricing", "signup", "user"]
+                    .contains(room.lowercased())
             }
         }
     }
@@ -93,7 +98,7 @@ public enum MeetingLinks {
             for candidate in candidates(in: text) {
                 guard candidate.scheme?.lowercased() == "https", let host = candidate.host?.lowercased() else { continue }
                 for entry in hosts where host == entry.suffix || host.hasSuffix("." + entry.suffix) {
-                    guard entry.pathRule.accepts(host: host, path: candidate.path) else { continue }
+                    guard entry.pathRule.accepts(host: host, url: candidate) else { continue }
                     return (candidate, entry.name)
                 }
             }

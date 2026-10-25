@@ -30,16 +30,23 @@ final class ContentRulesTests: XCTestCase {
         XCTAssertEqual(MeetingLinks.join(in: ["https://teams.microsoft.com/l/meetup-join/19%3ameeting"])?.service, "Teams")
         XCTAssertEqual(MeetingLinks.join(in: ["https://acme.webex.com/meet/alex"])?.service, "Webex")
         XCTAssertEqual(MeetingLinks.join(in: ["https://acme.webex.com/join/12345"])?.service, "Webex")
+        XCTAssertEqual(MeetingLinks.join(in: ["https://ieee.webex.com/ieee/onstage/g.php?MTID=e5f2a1b"])?.service, "Webex")
+        XCTAssertEqual(MeetingLinks.join(in: ["https://acme.webex.com/acme/J.php?MTID=m1"])?.service, "Webex")
         XCTAssertEqual(MeetingLinks.join(in: ["https://acme.webex.com/j.php?MTID=m12345"])?.service, "Webex")
         XCTAssertEqual(MeetingLinks.join(in: ["https://acme.webex.com/acme/j.php?MTID=m12345"])?.service, "Webex")
         XCTAssertEqual(MeetingLinks.join(in: ["https://whereby.com/team-room"])?.service, "Whereby")
+        let mixedWhereby = MeetingLinks.join(in: ["See https://whereby.com/blog and join https://whereby.com/team-room"])
+        XCTAssertEqual(mixedWhereby?.url.absoluteString, "https://whereby.com/team-room")
         XCTAssertNil(MeetingLinks.join(in: ["http://zoom.us/j/123"]), "HTTPS only")
         XCTAssertNil(MeetingLinks.join(in: ["https://zoom.us/pricing", "https://evil-zoom.us/j/1", "https://example.com/j/1"]))
         XCTAssertNil(MeetingLinks.join(in: ["https://meet.google.com/"]), "the bare homepage isn't a meeting")
         for url in ["https://www.webex.com/pricing/index.html", "https://webex.com/",
                     "https://www.webex.com/meet/alex", "https://acme.webex.com/pricing",
-                    "https://acme.webex.com/join-us",
-                    "https://whereby.com/pricing", "https://whereby.com/login",
+                    "https://acme.webex.com/join-us", "https://signin.webex.com/join",
+                    "https://help.webex.com/join", "https://acme.webex.com/acme/meeting.php",
+                    "https://whereby.com/pricing", "https://whereby.com/login", "https://whereby.com/blog",
+                    "https://whereby.com/signup", "https://whereby.com/about", "https://whereby.com/information/",
+                    "https://whereby.com/user", "https://whereby.com/download", "https://whereby.com/embedded",
                     "https://notwebex.com/meet/alex", "https://webex.com.evil.test/meet/alex",
                     "https://whereby.com/", "https://whereby.com/team-room/extra",
                     "https://notwhereby.com/team-room", "https://whereby.com.evil.test/team-room"] {
