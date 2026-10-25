@@ -1,10 +1,10 @@
 # Debug channel reference
 
-The Debug channel lets contributors drive app states that are difficult to reach from a test harness. It is compiled only into Debug builds (`#if DEBUG`). In the default configuration it watches `~/Library/Application Support/NotchFlow/debug`; a Debug build also accepts a non-empty `NOTCHFLOW_APP_SUPPORT` override, which is useful for keeping a test run's files and settings in a disposable folder.
+The Debug channel lets contributors drive app states that are difficult to reach from a test harness. It is compiled only into Debug builds (`#if DEBUG`). In the default configuration it watches `~/Library/Application Support/NotchFlow/debug`; a Debug build also accepts a non-empty `NOTCHFLOW_APP_SUPPORT` override to keep its files in a disposable folder. This override does not isolate settings: those remain in `UserDefaults` for the app's bundle identifier. The installed app and a default Debug build use `com.argahv.notchflow`; use the development bundle identifier `com.argahv.notchflow.dev` to isolate settings too. The [Clone, build and run instructions](../../CONTRIBUTING.md#clone-build-and-run) show how to build with that identifier.
 
-Write a UTF-8 command file outside the watched directory or with a temporary extension, then rename it to `*.cmd` only after it is complete. When the directory changes, NotchFlow reads matching files in filename order, attempts to delete each file after reading it, then runs its non-empty lines. Deletion errors are ignored, so a file may remain if removal fails. The directory is created with owner-only permissions. These lines are Debug channel commands, not shell commands: arguments are passed as text, and there is no shell quoting or escaping. The first colon separates the verb from its argument; the `clip` and `drop:text` commands translate the two characters `\n` into a newline.
+Write a UTF-8 command file outside the watched directory or with a temporary extension, then rename it to `*.cmd` only after it is complete. When the directory changes, NotchFlow reads matching files in filename order, attempts to delete each file after reading it, then runs its non-empty lines. Deletion errors are ignored, so a file may remain if removal fails. The directory is created with owner-only permissions. These lines are Debug channel commands, not shell commands: arguments are passed as text, and there is no shell quoting or escaping. The first colon separates the verb from its argument. Only plain `clip:<text>` and `drop:text:<text>` translate the two characters `\n` into a newline; the `clip:1password:`, `clip:safari:`, and `clip:concealed:` forms pass them through unchanged.
 
-For example, from the repository root:
+Start the Debug app before writing command files. It reads `.cmd` files when the watched directory changes, so files already present when the app starts may wait until another change. The [Clone, build and run instructions](../../CONTRIBUTING.md#clone-build-and-run) include the sandboxed Debug build command and environment setup. Then, from the repository root:
 
 ```bash
 debug="$PWD/build/debug-channel-data/debug"
@@ -17,7 +17,7 @@ EOF
 mv "$debug/.01.tmp" "$debug/01.cmd"
 ```
 
-Run a Debug build with `NOTCHFLOW_APP_SUPPORT` set to that same data folder. See [Contributing](../../CONTRIBUTING.md#debugging-without-special-hardware) for the sandboxed build command. Commands that copy to the clipboard, change preferences, add shelf items, or act on records can have real effects within the selected app data or macOS clipboard; use disposable data and demo content.
+Run the Debug app first with `NOTCHFLOW_APP_SUPPORT` set to that same data folder. This keeps app files separate, but settings remain shared unless the app was built with `PRODUCT_BUNDLE_IDENTIFIER=com.argahv.notchflow.dev`; see the [Clone, build and run instructions](../../CONTRIBUTING.md#clone-build-and-run). Commands that copy to the clipboard, change preferences, add shelf items, or act on records can have real effects within the selected app data or macOS clipboard; use disposable data and demo content.
 
 ## Commands
 
@@ -73,7 +73,7 @@ All names and values below are case-sensitive. Where an argument is described as
 
 ## Worked acceptance example: C2 clipboard filtering
 
-Acceptance scenario [C2](acceptance-tests.md#clipboard-downloads-meetings-system) checks that password-manager copies, concealed copies, and text that looks like a token are skipped and counted without being listed. Use a Debug build with a throwaway support directory as described in [Contributing](../../CONTRIBUTING.md#debugging-without-special-hardware). With that build running, enable clipboard suggestions and allow the observer to reconfigure:
+Acceptance scenario [C2](acceptance-tests.md#clipboard-downloads-meetings-system) checks that password-manager copies, concealed copies, and text that looks like a token are skipped and counted without being listed. Use a Debug build with a throwaway support directory as described in the [Clone, build and run instructions](../../CONTRIBUTING.md#clone-build-and-run). `NOTCHFLOW_APP_SUPPORT` isolates app files only; use `com.argahv.notchflow.dev` as the bundle identifier to isolate `UserDefaults` settings from the installed app. With the app running, `suggest:on` enables clipboard suggestions and reads the real macOS clipboard when its contents change. Avoid copying private data while this command is active; the example inputs below are synthetic. The command at the end disables clipboard suggestions again. If Clipboard History is also enabled, that separate setting continues clipboard monitoring until you turn it off in the app.
 
 ```bash
 debug="$PWD/build/debug-channel-data/debug"
@@ -96,10 +96,11 @@ clip:1password:https://bank.example/login
 clip:concealed:private-demo-copy
 clip:ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef1234
 status
+suggest:off
 EOF
 mv "$debug/.02-c2-copies.tmp" "$debug/02-c2-copies.cmd"
 ```
 
-The Debug channel attempts to remove each `.cmd` file after reading it; removal errors are ignored. Check `debug/status.txt`: the clipboard line should report `skipped 3`, with no listed items or suggestion containing the sample copies. This example uses only synthetic text and does not read or write the real clipboard. The checked-in [suggestion acceptance runner](../../Scripts/qa_suggestions.py) also exercises the password-manager and token filters in its `coordination` scenario.
+The Debug channel attempts to remove each `.cmd` file after reading it; removal errors are ignored. Check `debug/status.txt`: if the system clipboard does not change during the run, the clipboard line should report `skipped 3`, with no listed items or suggestion containing the sample copies. The synthetic inputs do not write to the system clipboard, but `suggest:on` does inspect the real clipboard while enabled. `suggest:off` disables clipboard suggestions; if Clipboard History is also enabled, it continues monitoring clipboard changes until you turn it off in the app. The checked-in [suggestion acceptance runner](../../Scripts/qa_suggestions.py) also exercises the password-manager and token filters in its `coordination` scenario.
 
 The command implementation is in [`DebugChannel.swift`](../../Sources/NotchFlow/Window/DebugChannel.swift); this reference should track its accepted forms.
