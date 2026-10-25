@@ -253,6 +253,8 @@ def command_segments(command):
     segments, current = [], []
     quote = None
     escaped = False
+    heredocs = []
+    arithmetic_depth = 0
     index = 0
     while index < len(command):
         char = command[index]
@@ -260,25 +262,85 @@ def command_segments(command):
             current.append(char)
             escaped = False
         elif char == "\\" and quote != "'":
+            if index + 1 < len(command) and command[index + 1] == "\n":
+                index += 2
+                continue
             current.append(char)
             escaped = True
         elif quote:
             current.append(char)
-            if char == quote:
+            if char == quote[-1]:
                 quote = None
+        elif command.startswith("$'", index):
+            current.extend(("$", "'"))
+            quote = "$'"
+            index += 1
+        elif command.startswith("((", index):
+            arithmetic_depth += 1
+            current.append("((")
+            index += 2
+            continue
+        elif arithmetic_depth and command.startswith("))", index):
+            arithmetic_depth -= 1
+            current.append("))")
+            index += 2
+            continue
+        elif not arithmetic_depth and char == "<" and command.startswith("<<", index) and not command.startswith("<<<", index):
+            delimiter_index = index + 2
+            strip_tabs = delimiter_index < len(command) and command[delimiter_index] == "-"
+            if strip_tabs:
+                delimiter_index += 1
+            while delimiter_index < len(command) and command[delimiter_index] in " \t":
+                delimiter_index += 1
+            if delimiter_index < len(command) and command[delimiter_index] in ("'", '"'):
+                delimiter_quote = command[delimiter_index]
+                delimiter_end = command.find(delimiter_quote, delimiter_index + 1)
+                delimiter = command[delimiter_index + 1:delimiter_end] if delimiter_end >= 0 else ""
+            else:
+                delimiter_end = delimiter_index
+                while delimiter_end < len(command) and not command[delimiter_end].isspace() and command[delimiter_end] not in ";|&<>":
+                    delimiter_end += 1
+                delimiter = command[delimiter_index:delimiter_end]
+            if delimiter:
+                heredocs.append((delimiter, strip_tabs))
+                current.append("<<")
+                index += 2
+                continue
+            current.append(char)
         elif char in ("'", '"'):
             current.append(char)
             quote = char
         elif char == "#" and (not current or current[-1].isspace()):
             while index < len(command) and command[index] != "\n":
                 index += 1
-            segments.append("".join(current))
-            current = []
+            if index < len(command):
+                index -= 1  # Let the newline finish the command and any pending here-documents.
+            else:
+                segments.append("".join(current))
+                current = []
         elif char in (";", "|", "\n") or (char == "&" and index + 1 < len(command) and command[index + 1] == "&"):
             if char in "&|" and index + 1 < len(command) and command[index + 1] == char:
                 index += 1
             segments.append("".join(current))
             current = []
+            if char == "\n" and heredocs:
+                for delimiter, strip_tabs in heredocs:
+                    found = False
+                    while index + 1 < len(command):
+                        index += 1
+                        line_end = command.find("\n", index)
+                        if line_end < 0:
+                            line_end = len(command)
+                        line = command[index:line_end]
+                        if (line.lstrip("\t") if strip_tabs else line) == delimiter:
+                            index = line_end
+                            found = True
+                            break
+                        index = line_end
+                    if not found:
+                        index = len(command)
+                        break
+                heredocs = []
         else:
             current.append(char)
         index += 1

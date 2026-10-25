@@ -140,15 +140,28 @@ class AgentHookTests(unittest.TestCase):
                 "cat <<'EOF'\n# it's a test\nEOF\npytest t.py", "deno test", "FOO=1 pytest -q",
                 "xcodebuild -scheme App test", "python3 -m unittest discover -s Tests", "time go test ./...",
                 "make lint; cargo test"]
+        runs.extend([
+            "cd app && \\\n  npm test",
+            "CI=1 \\\n  pytest -q",
+            "npm run build && \\\n  npm test",
+            "make lint; \\\n  cargo test",
+            "cat > src/sum.test.js <<'EOF'\n// it's the sum test\nEOF\nnpx jest",
+            "cat > README.md <<'EOF'\nWhat's new\nEOF\ngo test ./...",
+            "cat <<-EOF\n\tit's still a heredoc\n\tEOF\npytest t.py",
+            "cat <<'EOF' # test fixture\n// it's still a heredoc\nEOF\nnpx jest",
+            "echo $'it\\'s'; pytest",
+            "((1 << 2)); pytest",
+        ])
         runs.append("pytest -q; echo '" + "x" * 4100)  # The command cap may cut an open trailing quote.
         for command in runs:
             with self.subTest(command=command):
                 events, _ = self.run_hook(self.base("PreToolUse", tool_name="Bash", tool_input={"command": command}))
                 self.assertEqual(events[0]["agent"]["tool"], "Tests")
-                self.assertNotIn(command, json.dumps(events), "the command itself never leaves the hook")
+                self.assertNotIn(json.dumps(command)[1:-1], json.dumps(events), "the command itself never leaves the hook")
         for command in ("ls", "cat pytest.ini", "echo 'swift test'", "git commit -m 'npm test'", "swift build",
                         "npm testing", "npm run testing", "echo pytest", "pnpm -r list test",
-                        "echo 'literal; pytest -q'", 'echo "literal && pytest -q"',
+                        "echo 'literal; pytest -q'", 'echo "literal && pytest -q"', "echo $'pytest'",
+                        "echo $'literal; pytest -q'",
                         "echo literal\\; pytest -q", "echo 'literal; pytest -q"):
             with self.subTest(command=command):
                 self.assertFalse(bridge.runs_tests({"command": command}))
